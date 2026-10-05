@@ -1,11 +1,5 @@
-## Doorbell Overlay 0.1.0
+# Doorbell Overlay 0.2.0
 
-First standalone release.
-
-- Two independent Home Assistant trigger entities.
-- Home Assistant camera entity overlay.
-- One aspect-safe Camera size control instead of separate width/height.
-- Top / Center / Bottom positioning, visibility and display-time controls.
-- Uses the in-Activity overlay path on Kiosk Satellite and the system overlay on Fotoo.
-
-Do not enable this standalone Doorbell plugin at the same time as the doorbell part of the old combined Screensaver Overlay, or duplicate camera overlays may appear.
+- Adds an optional visibility rule controlled by a Home Assistant entity or a local time window.
+- Supports Active, Inactive, exact state matching, numeric above/below/between, and overnight time ranges such as 22:00-06:00.
+- Test/preview commands bypass the visibility rule so configuration remains easy to verify.
