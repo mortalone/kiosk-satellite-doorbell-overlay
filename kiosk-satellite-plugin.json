@@ -3,10 +3,10 @@
   "apiVersion": 1,
   "id": "doorbell-overlay",
   "name": "Doorbell Overlay",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "minAndroidSdk": 26,
   "entryClass": "me.jxl.kiosk.plugins.doorbelloverlay.DoorbellOverlayPlugin",
-  "description": "Doorbell camera overlay for Kiosk Satellite screensavers and Fotoo with two Home Assistant triggers and aspect-safe camera sizing.",
+  "description": "Doorbell camera overlay for Kiosk Satellite screensavers and Fotoo with dual triggers, individual detection and doorbell ring sizing, positions and durations.",
   "author": "Local Kiosk Satellite project",
   "license": "MIT",
   "capabilities": [
@@ -63,87 +63,172 @@
       "description": "Value for the condition. Examples: on, 30, 10..200, or 22:00-06:00."
     },
     {
-      "key": "doorbellEntity",
-      "type": "entity",
-      "title": "Trigger 1",
-      "default": "",
-      "group": "Doorbell",
-      "description": "Primary trigger, for example a Frigate person occupancy binary_sensor."
-    },
-    {
-      "key": "doorbellEntity2",
-      "type": "entity",
-      "title": "Trigger 2",
-      "default": "",
-      "group": "Doorbell",
-      "description": "Secondary trigger, for example the Reolink visitor/ring-button binary_sensor."
-    },
-    {
       "key": "doorbellCameraEntity",
       "type": "entity",
-      "title": "Doorbell camera entity",
+      "title": "Default camera entity",
       "default": "",
-      "group": "Doorbell",
-      "description": "Home Assistant camera entity shown when either trigger activates."
+      "group": "Camera",
+      "description": "Primary Home Assistant camera entity (e.g. camera.doorbellcamera)."
+    },
+    {
+      "key": "doorbellEntity",
+      "type": "entity",
+      "title": "Trigger 1 entity (detection)",
+      "default": "",
+      "group": "Trigger 1 – Detektering",
+      "description": "Detection trigger, for example a Frigate person occupancy binary_sensor."
+    },
+    {
+      "key": "label1",
+      "type": "string",
+      "title": "Trigger 1 label",
+      "default": "Person detekteret",
+      "group": "Trigger 1 – Detektering",
+      "description": "Label badge shown on overlay for trigger 1 (leave empty to hide label)."
+    },
+    {
+      "key": "cameraSizePercent",
+      "type": "number",
+      "title": "Trigger 1 camera size",
+      "default": 50,
+      "min": 20,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "group": "Trigger 1 – Detektering",
+      "description": "Camera width as a percentage of screen width when trigger 1 activates."
+    },
+    {
+      "key": "cameraPosition",
+      "type": "select",
+      "title": "Trigger 1 camera position",
+      "default": "Top",
+      "options": [
+        "Top",
+        "Top left",
+        "Top right",
+        "Center",
+        "Bottom",
+        "Bottom left",
+        "Bottom right"
+      ],
+      "group": "Trigger 1 – Detektering",
+      "description": "Screen position for trigger 1 camera overlay."
+    },
+    {
+      "key": "doorbellSeconds",
+      "type": "number",
+      "title": "Trigger 1 display time",
+      "default": 15,
+      "min": 5,
+      "max": 60,
+      "step": 1,
+      "unit": "s",
+      "group": "Trigger 1 – Detektering",
+      "description": "How long the camera stays visible for trigger 1."
     },
     {
       "key": "cameraOpacity",
       "type": "number",
-      "title": "Camera visibility",
+      "title": "Trigger 1 camera visibility",
       "default": 100,
       "min": 10,
       "max": 100,
       "step": 5,
       "unit": "%",
-      "group": "Doorbell",
-      "description": "Camera overlay opacity."
+      "group": "Trigger 1 – Detektering",
+      "description": "Camera overlay opacity for trigger 1."
     },
     {
-      "key": "cameraSizePercent",
+      "key": "doorbellEntity2",
+      "type": "entity",
+      "title": "Trigger 2 entity (doorbell ring)",
+      "default": "",
+      "group": "Trigger 2 – Ringeklokke",
+      "description": "Doorbell ring button trigger, for example a Reolink visitor binary_sensor."
+    },
+    {
+      "key": "doorbellCameraEntity2",
+      "type": "entity",
+      "title": "Trigger 2 camera entity (optional)",
+      "default": "",
+      "group": "Trigger 2 – Ringeklokke",
+      "description": "Optional secondary camera entity for trigger 2. If left empty, default camera entity is used."
+    },
+    {
+      "key": "label2",
+      "type": "string",
+      "title": "Trigger 2 label",
+      "default": "Dørklokke",
+      "group": "Trigger 2 – Ringeklokke",
+      "description": "Label badge shown on overlay for trigger 2 (leave empty to hide label)."
+    },
+    {
+      "key": "cameraSizePercent2",
       "type": "number",
-      "title": "Camera size",
+      "title": "Trigger 2 camera size",
       "default": 90,
-      "min": 30,
+      "min": 20,
       "max": 100,
       "step": 5,
       "unit": "%",
-      "group": "Doorbell",
-      "description": "Camera width as a percentage of screen width. Height follows the camera frame aspect ratio."
+      "group": "Trigger 2 – Ringeklokke",
+      "description": "Camera width as a percentage of screen width when trigger 2 activates."
     },
     {
-      "key": "cameraPosition",
+      "key": "cameraPosition2",
       "type": "select",
-      "title": "Camera position",
+      "title": "Trigger 2 camera position",
       "default": "Center",
       "options": [
         "Top",
+        "Top left",
+        "Top right",
         "Center",
-        "Bottom"
+        "Bottom",
+        "Bottom left",
+        "Bottom right"
       ],
-      "group": "Doorbell",
-      "description": "Vertical position of the camera overlay."
+      "group": "Trigger 2 – Ringeklokke",
+      "description": "Screen position for trigger 2 camera overlay."
     },
     {
-      "key": "doorbellSeconds",
+      "key": "doorbellSeconds2",
       "type": "number",
-      "title": "Camera display time",
-      "default": 20,
+      "title": "Trigger 2 display time",
+      "default": 30,
       "min": 5,
       "max": 60,
       "step": 1,
       "unit": "s",
-      "group": "Doorbell",
-      "description": "How long the doorbell camera stays visible after a trigger."
+      "group": "Trigger 2 – Ringeklokke",
+      "description": "How long the camera stays visible for trigger 2."
+    },
+    {
+      "key": "cameraOpacity2",
+      "type": "number",
+      "title": "Trigger 2 camera visibility",
+      "default": 100,
+      "min": 10,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "group": "Trigger 2 – Ringeklokke",
+      "description": "Camera overlay opacity for trigger 2."
     }
   ],
   "commands": [
     {
+      "id": "showDetectionTest",
+      "title": "Show Trigger 1 test (Detection)"
+    },
+    {
       "id": "showCameraTest",
-      "title": "Show doorbell camera test"
+      "title": "Show Trigger 2 test (Doorbell ring)"
     },
     {
       "id": "hideCameraTest",
-      "title": "Hide doorbell camera test"
+      "title": "Hide camera test"
     },
     {
       "id": "hide",
@@ -158,7 +243,13 @@
       "title": "Visibility"
     },
     {
-      "title": "Doorbell"
+      "title": "Camera"
+    },
+    {
+      "title": "Trigger 1 – Detektering"
+    },
+    {
+      "title": "Trigger 2 – Ringeklokke"
     }
   ]
 }

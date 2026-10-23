@@ -90,6 +90,9 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
     private String doorbellEntity = "";
     private String doorbellEntity2 = "";
     private String doorbellCameraEntity = "";
+    private String doorbellCameraEntity2 = "";
+    private String label1 = "Person detekteret";
+    private String label2 = "Dørklokke";
     private boolean showPaused = true;
     private String nowPlayingPosition = "Bottom";
     private int nowPlayingOffset = 34;
@@ -99,11 +102,62 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
     private String timeLabels = "Elapsed / remaining";
     private boolean showPlaylist = false;
     private boolean showNextTrack = false;
-    private int doorbellSeconds = 20;
+    private int doorbellSeconds = 15;
+    private int doorbellSeconds2 = 30;
     private int cameraOpacity = 100;
-    private int cameraSizePercent = 90;
-    private String cameraPosition = "Center";
+    private int cameraOpacity2 = 100;
+    private int cameraSizePercent = 50;
+    private int cameraSizePercent2 = 90;
+    private String cameraPosition = "Top";
+    private String cameraPosition2 = "Center";
     private boolean cameraTestMode = false;
+    private int activeDoorbellTrigger = 2;
+    private Bitmap lastCameraBitmap1;
+    private Bitmap lastCameraBitmap2;
+    private Map<?, ?> cameraAttributes = Collections.emptyMap();
+    private Map<?, ?> cameraAttributes2 = Collections.emptyMap();
+    private boolean cameraState2PollPending;
+
+    private int getActiveCameraSizePercent() {
+        return activeDoorbellTrigger == 1 ? cameraSizePercent : cameraSizePercent2;
+    }
+
+    private String getActiveCameraPosition() {
+        return activeDoorbellTrigger == 1 ? cameraPosition : cameraPosition2;
+    }
+
+    private int getActiveDoorbellSeconds() {
+        return activeDoorbellTrigger == 1 ? doorbellSeconds : doorbellSeconds2;
+    }
+
+    private int getActiveCameraOpacity() {
+        return activeDoorbellTrigger == 1 ? cameraOpacity : cameraOpacity2;
+    }
+
+    private String getActiveDoorbellLabel() {
+        return activeDoorbellTrigger == 1 ? label1 : label2;
+    }
+
+    private String getActiveCameraEntity() {
+        if (activeDoorbellTrigger == 2 && !doorbellCameraEntity2.isEmpty()) {
+            return doorbellCameraEntity2;
+        }
+        return doorbellCameraEntity;
+    }
+
+    private Map<?, ?> getActiveCameraAttributes() {
+        if (activeDoorbellTrigger == 2 && !doorbellCameraEntity2.isEmpty()) {
+            return cameraAttributes2;
+        }
+        return cameraAttributes;
+    }
+
+    private Bitmap getActiveCameraBitmap() {
+        if (activeDoorbellTrigger == 2 && !doorbellCameraEntity2.isEmpty()) {
+            return lastCameraBitmap2;
+        }
+        return lastCameraBitmap1;
+    }
     private boolean showOnKioskScreensaver = true;
     private boolean showOnFotoo = true;
     private String visibilityEntity = "";
@@ -135,7 +189,6 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
     private long maLastSuccessRealtime;
     private String playlistState = "";
     private String nextTrackState = "";
-    private Map<?, ?> cameraAttributes = Collections.emptyMap();
     private String lastDoorbellState;
     private boolean doorbellInitialSeen;
     private String lastDoorbellState2;
@@ -278,10 +331,16 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
             main.post(this::updatePresentation);
         } else if ("test".equals(command)) {
             main.post(this::showTestOverlay);
+        } else if ("showDetectionTest".equals(command)) {
+            cameraTestMode = true;
+            main.post(() -> {
+                if (overlayActive()) showDoorbell(1, true);
+                updatePresentation();
+            });
         } else if ("showCameraTest".equals(command)) {
             cameraTestMode = true;
             main.post(() -> {
-                if (overlayActive()) showDoorbell(true);
+                if (overlayActive()) showDoorbell(2, true);
                 updatePresentation();
             });
         } else if ("hideCameraTest".equals(command)) {
@@ -348,7 +407,16 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
 
         if (entityId.equals(doorbellCameraEntity)) {
             cameraAttributes = attrs;
-            if (doorbellView != null) main.post(this::refreshDoorbellImage);
+            if (doorbellView != null && (activeDoorbellTrigger == 1 || doorbellCameraEntity2.isEmpty())) {
+                main.post(this::refreshDoorbellImage);
+            }
+        }
+
+        if (!doorbellCameraEntity2.isEmpty() && entityId.equals(doorbellCameraEntity2)) {
+            cameraAttributes2 = attrs;
+            if (doorbellView != null && activeDoorbellTrigger == 2) {
+                main.post(this::refreshDoorbellImage);
+            }
         }
 
         if (entityId.equals(doorbellEntity)) {
@@ -389,11 +457,17 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
         kioskScreensaverView = "";
         mediaPollPending = false;
         cameraStatePollPending = false;
+        cameraState2PollPending = false;
         trigger1PollPending = false;
         trigger2PollPending = false;
         playlistPollPending = false;
         nextTrackPollPending = false;
         maQueuePollPending = false;
+        lastCameraBitmap1 = null;
+        lastCameraBitmap2 = null;
+        cameraAttributes = Collections.emptyMap();
+        cameraAttributes2 = Collections.emptyMap();
+        activeDoorbellTrigger = 2;
         host = null;
         settings = null;
         context = null;
@@ -514,6 +588,7 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
         String nextDoorbell = stringSetting(values, "doorbellEntity");
         String nextDoorbell2 = stringSetting(values, "doorbellEntity2");
         String nextCamera = stringSetting(values, "doorbellCameraEntity");
+        String nextCamera2 = stringSetting(values, "doorbellCameraEntity2");
         String nextVisibility = stringSetting(values, "visibilityEntity");
         String nextVisibilityCondition = stringSetting(values, "visibilityCondition");
         String nextVisibilityValue = stringSetting(values, "visibilityValue");
@@ -525,6 +600,7 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
         if (!nextDoorbell.isEmpty()) wanted.add(nextDoorbell);
         if (!nextDoorbell2.isEmpty()) wanted.add(nextDoorbell2);
         if (!nextCamera.isEmpty()) wanted.add(nextCamera);
+        if (!nextCamera2.isEmpty()) wanted.add(nextCamera2);
         if (!nextVisibility.isEmpty() &&
                 !"Always".equals(nextVisibilityCondition) &&
                 !"Time between".equals(nextVisibilityCondition)) {
@@ -547,6 +623,7 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
         doorbellEntity = nextDoorbell;
         doorbellEntity2 = nextDoorbell2;
         doorbellCameraEntity = nextCamera;
+        doorbellCameraEntity2 = nextCamera2;
         visibilityEntity = nextVisibility;
         visibilityCondition = nextVisibilityCondition.isEmpty()
                 ? "Always" : nextVisibilityCondition;
@@ -574,14 +651,28 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
         timeLabels = labels.isEmpty() ? "Elapsed / remaining" : labels;
         showPlaylist = Boolean.TRUE.equals(values.get("showPlaylist"));
         showNextTrack = Boolean.TRUE.equals(values.get("showNextTrack"));
+
+        label1 = values.containsKey("label1") ? stringSetting(values, "label1") : "Person detekteret";
+        label2 = values.containsKey("label2") ? stringSetting(values, "label2") : "Dørklokke";
+
         Object seconds = values.get("doorbellSeconds");
-        doorbellSeconds = seconds instanceof Number ? Math.max(5, Math.min(60, ((Number) seconds).intValue())) : 20;
+        doorbellSeconds = seconds instanceof Number ? Math.max(5, Math.min(60, ((Number) seconds).intValue())) : 15;
         Object camOpacity = values.get("cameraOpacity");
         cameraOpacity = camOpacity instanceof Number ? Math.max(10, Math.min(100, ((Number) camOpacity).intValue())) : 100;
         Object camSize = values.get("cameraSizePercent");
-        cameraSizePercent = camSize instanceof Number ? Math.max(30, Math.min(100, ((Number) camSize).intValue())) : 90;
-        String camPosition = stringSetting(values, "cameraPosition");
-        cameraPosition = "Top".equals(camPosition) || "Bottom".equals(camPosition) ? camPosition : "Center";
+        cameraSizePercent = camSize instanceof Number ? Math.max(20, Math.min(100, ((Number) camSize).intValue())) : 50;
+        String camPositionSetting = stringSetting(values, "cameraPosition");
+        cameraPosition = camPositionSetting.isEmpty() ? "Top" : camPositionSetting;
+
+        Object seconds2 = values.get("doorbellSeconds2");
+        doorbellSeconds2 = seconds2 instanceof Number ? Math.max(5, Math.min(60, ((Number) seconds2).intValue())) : 30;
+        Object camOpacity2Setting = values.get("cameraOpacity2");
+        cameraOpacity2 = camOpacity2Setting instanceof Number ? Math.max(10, Math.min(100, ((Number) camOpacity2Setting).intValue())) : 100;
+        Object camSize2 = values.get("cameraSizePercent2");
+        cameraSizePercent2 = camSize2 instanceof Number ? Math.max(20, Math.min(100, ((Number) camSize2).intValue())) : 90;
+        String camPosition2Setting = stringSetting(values, "cameraPosition2");
+        cameraPosition2 = camPosition2Setting.isEmpty() ? "Center" : camPosition2Setting;
+
         String overlayTarget = stringSetting(values, "overlayTarget");
         if ("Kiosk Satellite only".equals(overlayTarget)) {
             showOnKioskScreensaver = true;
@@ -598,6 +689,8 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
         lastDoorbellState = null;
         doorbellInitialSeen2 = false;
         lastDoorbellState2 = null;
+        lastCameraBitmap1 = null;
+        lastCameraBitmap2 = null;
         loadedMediaPicture = "";
         renderedMediaPicture = "";
         renderedMediaPictureKey = "";
@@ -759,6 +852,7 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
             int width,
             int height,
             int gravity,
+            int xOffset,
             int yOffset,
             boolean camera) {
         if (view == null) return false;
@@ -776,6 +870,11 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
                     } else if ((gravity & Gravity.BOTTOM) == Gravity.BOTTOM) {
                         params.bottomMargin = yOffset;
                     }
+                    if ((gravity & Gravity.START) == Gravity.START) {
+                        params.leftMargin = xOffset;
+                    } else if ((gravity & Gravity.END) == Gravity.END) {
+                        params.rightMargin = xOffset;
+                    }
                     root.addView(view, params);
                     if (Build.VERSION.SDK_INT >= 21) view.setZ(100000f);
                     view.bringToFront();
@@ -790,9 +889,20 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
                 ? cameraOverlayParams(width, height)
                 : overlayParams(width, height);
         params.gravity = gravity;
+        params.x = xOffset;
         params.y = yOffset;
         windowManager.addView(view, params);
         return true;
+    }
+
+    private boolean addOverlayView(
+            View view,
+            int width,
+            int height,
+            int gravity,
+            int yOffset,
+            boolean camera) {
+        return addOverlayView(view, width, height, gravity, 0, yOffset, camera);
     }
 
     private void removeOverlayView(View view) {
@@ -853,8 +963,8 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
         // live while Fotoo owns the screen.
         main.post(liveStatePollTask);
 
-        if (cameraTestMode && !doorbellCameraEntity.isEmpty()) {
-            showDoorbell(true);
+        if (cameraTestMode && (!doorbellCameraEntity.isEmpty() || !doorbellCameraEntity2.isEmpty())) {
+            showDoorbell(activeDoorbellTrigger, true);
             pollCameraEntity();
         }
         pollMediaEntity();
@@ -1265,19 +1375,41 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
     }
 
     private void pollCameraEntity() {
-        if (host == null || doorbellCameraEntity.isEmpty() || cameraStatePollPending) return;
-        cameraStatePollPending = true;
-        Map<String, Object> args = new HashMap<>();
-        args.put("entityId", doorbellCameraEntity);
-        host.executeCommand("getHaEntityState", args, (ok, data, error) -> {
-            cameraStatePollPending = false;
-            if (!ok || !(data instanceof Map)) return;
-            Object attrsValue = ((Map<?, ?>) data).get("attributes");
-            if (attrsValue instanceof Map) {
-                cameraAttributes = (Map<?, ?>) attrsValue;
-                if (doorbellView != null) main.post(this::refreshDoorbellImage);
-            }
-        });
+        String cam1 = doorbellCameraEntity;
+        if (host != null && !cam1.isEmpty() && !cameraStatePollPending) {
+            cameraStatePollPending = true;
+            Map<String, Object> args = new HashMap<>();
+            args.put("entityId", cam1);
+            host.executeCommand("getHaEntityState", args, (ok, data, error) -> {
+                cameraStatePollPending = false;
+                if (!ok || !(data instanceof Map)) return;
+                Object attrsValue = ((Map<?, ?>) data).get("attributes");
+                if (attrsValue instanceof Map) {
+                    cameraAttributes = (Map<?, ?>) attrsValue;
+                    if (doorbellView != null && (activeDoorbellTrigger == 1 || doorbellCameraEntity2.isEmpty())) {
+                        main.post(this::refreshDoorbellImage);
+                    }
+                }
+            });
+        }
+
+        String cam2 = doorbellCameraEntity2;
+        if (host != null && !cam2.isEmpty() && !cam2.equals(cam1) && !cameraState2PollPending) {
+            cameraState2PollPending = true;
+            Map<String, Object> args = new HashMap<>();
+            args.put("entityId", cam2);
+            host.executeCommand("getHaEntityState", args, (ok, data, error) -> {
+                cameraState2PollPending = false;
+                if (!ok || !(data instanceof Map)) return;
+                Object attrsValue = ((Map<?, ?>) data).get("attributes");
+                if (attrsValue instanceof Map) {
+                    cameraAttributes2 = (Map<?, ?>) attrsValue;
+                    if (doorbellView != null && activeDoorbellTrigger == 2) {
+                        main.post(this::refreshDoorbellImage);
+                    }
+                }
+            });
+        }
     }
 
     private void pollDoorbellTrigger(int which) {
@@ -1324,7 +1456,14 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
             lastDoorbellState2 = state;
         }
 
-        if (trigger && overlayActive()) main.post(() -> showDoorbell(false));
+        if (trigger && overlayActive()) {
+            main.post(() -> {
+                if (doorbellView != null && activeDoorbellTrigger == 2 && which == 1) {
+                    return;
+                }
+                showDoorbell(which, false);
+            });
+        }
     }
 
     private void pollSimpleTextEntity(String entity, boolean playlist) {
@@ -1503,100 +1642,173 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
         return kept.length() == 0 ? base : base + "?" + kept;
     }
 
-    private void showDoorbell(boolean testHold) {
+    private int computeDoorbellGravity() {
+        String pos = getActiveCameraPosition();
+        if ("Top".equalsIgnoreCase(pos)) return Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        if ("Top left".equalsIgnoreCase(pos)) return Gravity.TOP | Gravity.START;
+        if ("Top right".equalsIgnoreCase(pos)) return Gravity.TOP | Gravity.END;
+        if ("Bottom".equalsIgnoreCase(pos)) return Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        if ("Bottom left".equalsIgnoreCase(pos)) return Gravity.BOTTOM | Gravity.START;
+        if ("Bottom right".equalsIgnoreCase(pos)) return Gravity.BOTTOM | Gravity.END;
+        return Gravity.CENTER;
+    }
+
+    private int computeDoorbellYOffset(int gravity) {
+        if ((gravity & Gravity.TOP) == Gravity.TOP || (gravity & Gravity.BOTTOM) == Gravity.BOTTOM) {
+            return dp(18);
+        }
+        return 0;
+    }
+
+    private int computeDoorbellXOffset(int gravity) {
+        if ((gravity & Gravity.START) == Gravity.START || (gravity & Gravity.END) == Gravity.END) {
+            return dp(18);
+        }
+        return 0;
+    }
+
+    private int[] computeDoorbellDimensions(int sourceWidth, int sourceHeight) {
+        int screenWidth = context.getResources().getDisplayMetrics().widthPixels;
+        int screenHeight = context.getResources().getDisplayMetrics().heightPixels;
+        int sizePercent = getActiveCameraSizePercent();
+        int width = Math.max(dp(200), screenWidth * sizePercent / 100);
+        width = Math.min(screenWidth, width);
+
+        int height;
+        if (sourceWidth > 0 && sourceHeight > 0) {
+            float aspect = (float) sourceWidth / (float) sourceHeight;
+            height = Math.max(dp(100), Math.round(width / aspect));
+            if (height > screenHeight) {
+                height = screenHeight;
+                width = Math.min(screenWidth, Math.round(height * aspect));
+            }
+        } else {
+            height = Math.max(dp(120), Math.round(width * 9f / 16f));
+            if (height > screenHeight) {
+                height = screenHeight;
+                width = Math.min(screenWidth, Math.round(height * 16f / 9f));
+            }
+        }
+        return new int[]{width, height};
+    }
+
+    private void updateDoorbellLabel() {
+        if (doorbellLabel == null) return;
+        String base = getActiveDoorbellLabel();
+        if (base == null || base.trim().isEmpty()) {
+            if (doorbellHeldByTest) {
+                doorbellLabel.setText(activeDoorbellTrigger == 1 ? "Detektering – TEST" : "Dørklokke – TEST");
+                doorbellLabel.setVisibility(View.VISIBLE);
+            } else {
+                doorbellLabel.setVisibility(View.GONE);
+            }
+        } else {
+            doorbellLabel.setText(doorbellHeldByTest ? (base + " – TEST") : base);
+            doorbellLabel.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void createDoorbellView() {
+        if (doorbellView != null || context == null) return;
+
+        FrameLayout frame = new FrameLayout(context);
+        frame.setTag("doorbell-overlay:doorbell");
+        frame.setBackground(cardBackground(0xFF000000, 22));
+        frame.setAlpha(1f);
+        if (getActiveCameraOpacity() >= 100) {
+            frame.setClickable(true);
+            frame.setOnClickListener(v -> { /* consume touch inside camera; outside remains available to screensaver */ });
+        }
+
+        doorbellImage = new ImageView(context);
+        doorbellImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        doorbellImage.setAlpha(1f);
+        frame.addView(doorbellImage, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        doorbellLabel = textView(18, true, Color.WHITE);
+        TextView label = doorbellLabel;
+        label.setPadding(dp(14), dp(10), dp(14), dp(10));
+        label.setBackground(cardBackground(0xE6000000, 14));
+        FrameLayout.LayoutParams labelParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        labelParams.gravity = Gravity.TOP | Gravity.START;
+        labelParams.leftMargin = dp(14);
+        labelParams.topMargin = dp(14);
+        frame.addView(label, labelParams);
+        updateDoorbellLabel();
+
+        Bitmap cached = getActiveCameraBitmap();
+        int[] dims;
+        if (cached != null) {
+            dims = computeDoorbellDimensions(cached.getWidth(), cached.getHeight());
+            int opacity = getActiveCameraOpacity();
+            Bitmap shown = opacity >= 100 ? opaqueBitmap(cached) : cached;
+            doorbellImage.setImageBitmap(shown);
+        } else {
+            dims = computeDoorbellDimensions(-1, -1);
+        }
+        int width = dims[0];
+        int height = dims[1];
+        int gravity = computeDoorbellGravity();
+        int xOffset = computeDoorbellXOffset(gravity);
+        int yOffset = computeDoorbellYOffset(gravity);
+
+        try {
+            if (!addOverlayView(frame, width, height, gravity, xOffset, yOffset, true)) {
+                throw new IllegalStateException("No overlay host is available");
+            }
+            doorbellView = frame;
+            applyCameraVisibility();
+        } catch (Throwable error) {
+            host.status("Doorbell overlay failed: " + safeMessage(error), true);
+        }
+    }
+
+    private void showDoorbell(int triggerSource, boolean testHold) {
         if (!overlayActive() || context == null || windowManager == null) return;
         main.removeCallbacks(hideDoorbellTask);
         main.removeCallbacks(cameraRefreshTask);
         if (testHold) doorbellHeldByTest = true;
 
+        if (doorbellView != null && activeDoorbellTrigger != triggerSource) {
+            hideDoorbellImmediate();
+        }
+
+        activeDoorbellTrigger = triggerSource;
+        if (testHold) doorbellHeldByTest = true;
+
         if (doorbellView == null) {
-            FrameLayout frame = new FrameLayout(context);
-            frame.setTag("doorbell-overlay:doorbell");
-            frame.setBackground(cardBackground(0xFF000000, 22));
-            frame.setAlpha(1f);
-            if (cameraOpacity >= 100) {
-                frame.setClickable(true);
-                frame.setOnClickListener(v -> { /* consume touch inside camera; outside remains available to the screensaver */ });
-            }
-
-            doorbellImage = new ImageView(context);
-            doorbellImage.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            doorbellImage.setAlpha(1f);
-            frame.addView(doorbellImage, new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-            doorbellLabel = textView(18, true, Color.WHITE);
-            doorbellLabel.setText(doorbellHeldByTest ? "Dørklokke – TEST" : "Dørklokke");
-            TextView label = doorbellLabel;
-            label.setPadding(dp(14), dp(10), dp(14), dp(10));
-            label.setBackground(cardBackground(0xE6000000, 14));
-            FrameLayout.LayoutParams labelParams = new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            labelParams.gravity = Gravity.TOP | Gravity.START;
-            labelParams.leftMargin = dp(14);
-            labelParams.topMargin = dp(14);
-            frame.addView(label, labelParams);
-
-            int screenWidth = context.getResources().getDisplayMetrics().widthPixels;
-            int screenHeight = context.getResources().getDisplayMetrics().heightPixels;
-            int width = Math.max(dp(240), screenWidth * cameraSizePercent / 100);
-            width = Math.min(screenWidth, width);
-            int height = Math.max(dp(135), Math.round(width * 9f / 16f));
-            if (height > screenHeight) {
-                height = screenHeight;
-                width = Math.min(screenWidth, Math.round(height * 16f / 9f));
-            }
-            int gravity;
-            int yOffset;
-            if ("Top".equals(cameraPosition)) {
-                gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-                yOffset = dp(18);
-            } else if ("Bottom".equals(cameraPosition)) {
-                gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-                yOffset = dp(18);
-            } else {
-                gravity = Gravity.CENTER;
-                yOffset = 0;
-            }
-
-            try {
-                if (!addOverlayView(frame, width, height, gravity, yOffset, true)) {
-                    throw new IllegalStateException("No overlay host is available");
-                }
-                doorbellView = frame;
-                applyCameraVisibility();
-            } catch (Throwable error) {
-                host.status("Doorbell overlay failed: " + safeMessage(error), true);
-                return;
-            }
+            createDoorbellView();
+        } else {
+            updateDoorbellLabel();
+            applyCameraVisibility();
         }
 
-        if (doorbellLabel != null) {
-            doorbellLabel.setText(doorbellHeldByTest ? "Dørklokke – TEST" : "Dørklokke");
-        }
         pollCameraEntity();
         refreshDoorbellImage();
         main.post(cameraRefreshTask);
         if (!doorbellHeldByTest) {
-            main.postDelayed(hideDoorbellTask, doorbellSeconds * 1000L);
+            main.postDelayed(hideDoorbellTask, getActiveDoorbellSeconds() * 1000L);
         }
+    }
+
+    private void showDoorbell(boolean testHold) {
+        showDoorbell(activeDoorbellTrigger, testHold);
     }
 
     private void applyCameraVisibility() {
         if (doorbellView != null) {
-            // Keep the window itself fully opaque. Applying alpha to the parent
-            // lets Android composite the entire overlay with Fotoo underneath,
-            // which is exactly what looked washed out even at the high end.
             doorbellView.setAlpha(1f);
             doorbellView.setBackground(cardBackground(0xFF000000, 22));
         }
         if (doorbellImage != null) {
-            if (cameraOpacity >= 100) {
-                // Hard solid mode: no alpha at all on the camera image.
+            int opacity = getActiveCameraOpacity();
+            if (opacity >= 100) {
                 doorbellImage.setAlpha(1f);
                 doorbellImage.setImageAlpha(255);
             } else {
-                float alpha = Math.max(0.1f, Math.min(0.99f, cameraOpacity / 100f));
+                float alpha = Math.max(0.1f, Math.min(0.99f, opacity / 100f));
                 doorbellImage.setAlpha(alpha);
                 doorbellImage.setImageAlpha(255);
             }
@@ -1605,17 +1817,24 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
 
     private void refreshDoorbellImage() {
         if (cameraFetchPending || doorbellView == null || io == null) return;
-        String picture = attr(cameraAttributes, "entity_picture", "");
+        String picture = attr(getActiveCameraAttributes(), "entity_picture", "");
         String resolved = resolveHaUrl(picture);
         if (resolved == null) return;
 
         cameraFetchPending = true;
+        int currentTrigger = activeDoorbellTrigger;
         io.execute(() -> {
             Bitmap bitmap = fetchBitmap(resolved, true);
             main.post(() -> {
                 cameraFetchPending = false;
                 if (bitmap != null && doorbellImage != null && doorbellView != null) {
-                    Bitmap shown = cameraOpacity >= 100 ? opaqueBitmap(bitmap) : bitmap;
+                    if (currentTrigger == 1) {
+                        lastCameraBitmap1 = bitmap;
+                    } else {
+                        lastCameraBitmap2 = bitmap;
+                    }
+                    int opacity = getActiveCameraOpacity();
+                    Bitmap shown = opacity >= 100 ? opaqueBitmap(bitmap) : bitmap;
                     doorbellImage.setImageBitmap(shown);
                     applyCameraAspectRatio(bitmap.getWidth(), bitmap.getHeight());
                     applyCameraVisibility();
@@ -1627,17 +1846,9 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
     private void applyCameraAspectRatio(int sourceWidth, int sourceHeight) {
         if (doorbellView == null || sourceWidth <= 0 || sourceHeight <= 0) return;
 
-        int screenWidth = context.getResources().getDisplayMetrics().widthPixels;
-        int screenHeight = context.getResources().getDisplayMetrics().heightPixels;
-        int width = Math.max(dp(240), screenWidth * cameraSizePercent / 100);
-        width = Math.min(screenWidth, width);
-
-        float aspect = (float) sourceWidth / (float) sourceHeight;
-        int height = Math.max(dp(120), Math.round(width / aspect));
-        if (height > screenHeight) {
-            height = screenHeight;
-            width = Math.min(screenWidth, Math.round(height * aspect));
-        }
+        int[] dims = computeDoorbellDimensions(sourceWidth, sourceHeight);
+        int width = dims[0];
+        int height = dims[1];
 
         try {
             ViewGroup.LayoutParams params = doorbellView.getLayoutParams();
@@ -1747,10 +1958,11 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
     }
 
     private WindowManager.LayoutParams cameraOverlayParams(int width, int height) {
+        int opacity = getActiveCameraOpacity();
         int flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                 | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
                 | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN;
-        if (cameraOpacity < 100) {
+        if (opacity < 100) {
             // A translucent camera is deliberately pass-through.
             flags |= WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE;
         }
@@ -1761,7 +1973,7 @@ public final class DoorbellOverlayPlugin implements KioskPlugin {
                         ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                         : WindowManager.LayoutParams.TYPE_PHONE,
                 flags,
-                cameraOpacity >= 100 ? PixelFormat.RGB_565 : PixelFormat.TRANSLUCENT
+                opacity >= 100 ? PixelFormat.RGB_565 : PixelFormat.TRANSLUCENT
         );
         params.alpha = 1f;
         return params;
