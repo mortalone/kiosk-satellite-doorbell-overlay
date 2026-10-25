@@ -1,3 +1,11 @@
+# Doorbell Overlay 0.3.1
+
+- Converted camera entity settings (`doorbellCameraEntity` and `doorbellCameraEntity2`) from `type: "entity"` to `type: "string"`:
+  - Eliminates Kiosk Satellite's false "entity is gone from Home Assistant" orange triangle error icon.
+  - Allows direct text entry/copy-paste of any Home Assistant camera entity (default: `camera.doorbellcamera`).
+- Added `"domain": "binary_sensor"` filter to Trigger 1 (`doorbellEntity`) and Trigger 2 (`doorbellEntity2`):
+  - Entity picker modal now opens directly filtered to binary sensors, preventing clutter from switches and lights.
+
 # Doorbell Overlay 0.3.0
 
 - Individual settings for Trigger 1 (Detection) and Trigger 2 (Doorbell Ring):
